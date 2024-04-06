@@ -87,15 +87,49 @@ TEST_CASE("trim", "[utils]") {
     }
 }
 
+#ifdef WIN32
+
+static int clock_gettime_realtime(timespec* tv)
+{
+    constexpr auto MS_PER_SEC = 1000ULL;     // MS = milliseconds
+    constexpr auto US_PER_MS = 1000ULL;     // US = microseconds
+    constexpr auto HNS_PER_US = 10ULL;       // HNS = hundred-nanoseconds (e.g., 1 hns = 100 ns)
+    constexpr auto  NS_PER_US = 1000ULL;
+    constexpr auto  HNS_PER_SEC = (MS_PER_SEC * US_PER_MS * HNS_PER_US);
+    constexpr auto  NS_PER_HNS = (100ULL);    // NS = nanoseconds
+    constexpr auto  NS_PER_SEC = (MS_PER_SEC * US_PER_MS * NS_PER_US);
+
+    FILETIME ft;
+    GetSystemTimePreciseAsFileTime(&ft);
+
+    ULARGE_INTEGER hnsTime;
+    hnsTime.LowPart = ft.dwLowDateTime;
+    hnsTime.HighPart = ft.dwHighDateTime;
+
+    // To get POSIX Epoch as baseline, subtract the number of hns intervals from Jan 1, 1601 to Jan 1, 1970.
+    hnsTime.QuadPart -= (11644473600ULL * HNS_PER_SEC);
+
+    // modulus by hns intervals per second first, then convert to ns, as not to lose resolution
+    tv->tv_nsec = (long)((hnsTime.QuadPart % HNS_PER_SEC) * NS_PER_HNS);
+    tv->tv_sec = (long)(hnsTime.QuadPart / HNS_PER_SEC);
+
+    return 0;
+}
+
+#endif // WIN32
+
+
 TEST_CASE("time", "[utils]") {
     timespec ts;
+#ifdef WIN32
+    clock_gettime_realtime(&ts);
+#else
     clock_gettime(CLOCK_REALTIME, &ts);
+#endif // WIN32
+    
     auto ms = ts.tv_sec * 1000 + lround(ts.tv_nsec / 1e6);
     REQUIRE(current_unix_time() - ms <= 1);
 }
-
-// TODO: message_as_json
-// TODO: evalRequest
 
 namespace {
 bool operator==(const grpc::Status& lhs, const grpc::Status& rhs) { return lhs.error_code() == rhs.error_code() && lhs.error_message() == rhs.error_message(); }
@@ -152,8 +186,12 @@ TEST_CASE("getDatasetName", "[utils]") {
 // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 TEST_CASE("readFile", "[fs_utils]") {
-    auto result = grpc_mock_server::readFile("CTestTestfile.cmake");
-    REQUIRE(result.substr(0, 30) == "# CMake generated Testfile for");
+#ifdef WIN32
+    auto result = grpc_mock_server::readFile("C:\\Windows\\win.ini");
+    REQUIRE(result.substr(0, 24) == "; for 16-bit app support");
+#else
+#error "Not implemented yet!"
+#endif
 }
 
 // --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

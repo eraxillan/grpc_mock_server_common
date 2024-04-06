@@ -605,7 +605,7 @@ auto MessageWrapper::parse(const std::string& grammar, const std::string& progra
                     result += ".";
                 }
             }
-            std::regex_replace(result, std::regex{ R"(^\s+|\s+$)" }, "");
+            result = std::regex_replace(result, std::regex{ R"(^\s+|\s+$)" }, "");
         }
         else {
             assert(0);
